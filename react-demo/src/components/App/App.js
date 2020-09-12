@@ -84,7 +84,7 @@ export default function App() {
     const sources = await getSources();
 
     const newCallObject = DailyIframe.createCallObject({
-      // ...sources,
+      ...sources,
     });
 
     setRoomUrl(url);
