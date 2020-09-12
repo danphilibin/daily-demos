@@ -8,6 +8,7 @@ import CallObjectContext from '../../CallObjectContext';
 import { roomUrlFromPageUrl, pageUrlFromRoomUrl } from '../../urlUtils';
 import DailyIframe from '@daily-co/daily-js';
 import { logDailyEvent } from '../../logUtils';
+import useOrientation from '../../useOrientation';
 
 const STATE_IDLE = 'STATE_IDLE';
 const STATE_CREATING = 'STATE_CREATING';
@@ -16,10 +17,44 @@ const STATE_JOINED = 'STATE_JOINED';
 const STATE_LEAVING = 'STATE_LEAVING';
 const STATE_ERROR = 'STATE_ERROR';
 
+const getSources = async () => {
+  // 4:3
+  let dimensions = [320, 240];
+
+  // rotate 4:3 for iPhone in portrait.
+  // iPhone appears to rotate its camera for portrait mode, so "4:3"
+  // appears as 3:4 (tall). If you want *true* landscape while in portrait,
+  // you must request 3:4 in portrait and regular 4:3 in landscape.
+  if (window.orientation === 0 || window.orientation === 180) {
+    dimensions.reverse();
+  }
+
+  const constraints = {};
+
+  let min, max, ideal;
+
+  // set min, max, and ideal to the same value to force the resolution
+  [min, max, ideal] = Array(3).fill(dimensions[0]);
+  constraints.width = { min, max, ideal };
+  [min, max, ideal] = Array(3).fill(dimensions[1]);
+  constraints.height = { min, max, ideal };
+
+  const stream = await navigator.mediaDevices.getUserMedia({
+    video: constraints,
+    audio: true,
+  });
+
+  return {
+    videoSource: stream.getVideoTracks()[0],
+    audioSource: stream.getAudioTracks()[0],
+  };
+};
+
 export default function App() {
   const [appState, setAppState] = useState(STATE_IDLE);
   const [roomUrl, setRoomUrl] = useState(null);
   const [callObject, setCallObject] = useState(null);
+  const orientation = useOrientation();
 
   /**
    * Creates a new call room.
@@ -45,13 +80,31 @@ export default function App() {
    * be done with the call object for a while and you're no longer listening to its
    * events.
    */
-  const startJoiningCall = useCallback((url) => {
-    const newCallObject = DailyIframe.createCallObject();
+  const startJoiningCall = useCallback(async (url) => {
+    const sources = await getSources();
+
+    const newCallObject = DailyIframe.createCallObject({
+      // ...sources,
+    });
+
     setRoomUrl(url);
     setCallObject(newCallObject);
     setAppState(STATE_JOINING);
-    newCallObject.join({ url });
+    newCallObject.join({ url, ...sources });
   }, []);
+
+  // Get a new set of audio/video sources and set them on the callObject
+  const updateSources = useCallback(() => {
+    if(!callObject) {
+      return
+    }
+    
+    getSources().then((sources) => {
+      callObject.setInputDevices(sources);
+    });
+  }, [callObject]);
+
+  useEffect(updateSources, [orientation]);
 
   /**
    * Starts leaving the current call.

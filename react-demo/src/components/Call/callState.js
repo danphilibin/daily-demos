@@ -141,6 +141,7 @@ function getMessage(callState) {
   } else if (Object.keys(callState.callItems).length === 1) {
     header = "Copy and share this page's URL to invite others";
     detail = window.location.href;
+    detail = window.location.href.replace('p://localhost:3002', 'ps://useinterval-dp.ngrok.io')
   }
   return header || detail ? { header, detail, isError } : null;
 }
